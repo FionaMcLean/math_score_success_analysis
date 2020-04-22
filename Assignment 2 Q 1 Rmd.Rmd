@@ -1,0 +1,79 @@
+---
+title: "An Analysis of Differences in Math Achievement between School and Students"
+author: Fiona McLean
+
+output: pdf_document
+header-includes:
+  - \usepackage[table,xcdraw]{xcolor}
+  - \usepackage{subcaption}
+  - \usepackage{float}
+---
+
+\newcommand{\subfloat}[2][need a sub-caption]{\subcaptionbox{#1}{#2} }
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+library("nlme")
+library(ggplot2)
+library("dplyr")
+
+data("MathAchieve", package = "MEMSS")
+```
+
+The quality of mathematical education is of high concern to parents, students, teachers and governments. Determining the differences in a quality mathematical education between schools is important as parents try to decide which schools are best to send their children, governments look to understand which schools are performing best and why, and secondary schools try to to determine how they perform compared to others. However, the notion of a "better" school as the most important factor to high test scores is not clear. There is a question of how significant variation of test scores is within schools, compared to the variation of test scores between students in a school. To answer this question, we will investigate if there exist substantial differences between schools, or if differences within schools are nearly as big as differences between students from different schools. 
+
+To answer this question, 7185 students were observed from 160 different schools. Their achievement in mathematics was measured, as well as other factors such as minority status and socio-economic status, which are both known to effect mathematical achievement. We will consider some graphs below to get some intuition about the data. 
+
+```{r, fig.cap= "Each black dot in the graph above corresponds to the standard deviation of test scores within a single school. The red line is the standard deviation of the average test score across all schools. This graph shows that the standard deviation of test scores within each school are higher than the standard deviation of test scores across schools. This leads us to believe that student differences within schools may be greater than differences across schools.", echo=FALSE, fig.align='center',fig.pos='H'}
+school_dat <- group_by(MathAchieve, School) %>% summarise(sd = sd(MathAch)) # the std within each school
+
+overall_dat <- group_by(MathAchieve, School) %>% summarise(mean = mean(MathAch))
+
+ggplot(school_dat, aes(x= School, y=sd))+geom_point()+ylab("Standard Deviation within School")+ggtitle("Comparing Deviation within School to Deviation Across Schools")+geom_hline(aes(yintercept=sd(overall_dat$mean), linetype = "Sd Scores Across Schools"), color = "red")+ theme(  axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+ scale_linetype_manual(name = "Legend", values = c(1), 
+                      guide = guide_legend(override.aes = list(color = c("red"))))
+
+```
+
+The four top scoring schools and four lowest scoring schools are shown below.
+
+
+```{r, fig.cap= "We can see in the graph above that the average test score in the highest and lowest scoring schools are 15.5 points apart. However, the graph also shows that there exists great variation within some schools, for example, test scores in school 6469 are as low as 8 and as high as 22, giving us a 14 point variation within one school. This is further evidence that score variation within school may be greater than score variation across schools.", echo=FALSE, fig.align='center',fig.pos='H'}
+MathAchieve_filter <- MathAchieve %>% filter(School == c(8854,5762,8367,4458,6469,9198,3427,1433)) 
+MathAchieve_filter$School <- factor(MathAchieve_filter$School, levels=c(8854,5762,8367,4458,6469,9198,3427,1433))
+ggplot(data = MathAchieve_filter, aes(x=School, y= MathAch))+geom_boxplot()+ylab("Math Achievement")+xlab("Lowest and Highest Average Scoring Schools")+ggtitle("Math Achievement in the Highest and Lowest Scoring Schools")
+```
+
+A linear mixed model was used to determine if there are substantial differences between schools, or if differences within schools are nearly as big as differences between students from different schools. Minority status and socio-economic status are fixed effects, while school is a random effect. School is considered a random effect since it is reasonable to believe that all schools follow the same underlying distribution. 
+
+The model is:
+
+$Y_{ij}|U_{i} \sim N(\mu_{ij},\tau^2)$   
+$\mu_{ij} = X_{ij}\beta + U_{i}$  
+$U_{i} \sim N(0,\sigma^2)$, where:    
+  
+
+- $Y_{ij}$ is the test score for the ith individual in the jth school
+- $X_{ij}\beta$ has an intercept, effects of minority status and socio-economic status
+- $U_{i}$ is the random effect of school $i$
+- $\tau^2$ refers to the randomness associated with each observation
+
+The output of the model is seen below: 
+
+```{r}
+MathLme <- lme(MathAch ~ Minority + SES, random = ~1|School, data = MathAchieve)
+```
+
+
+\begin{table}[H]
+\centering
+```{r}
+knitr::kable(Pmisc::lmeTable(MathLme), digits = 2, escape = FALSE,  format='latex')
+```
+\caption{The table provides the output for the linear mixed model. $\sigma$ is the variation between schools, while $\tau$ is the variation between students.}
+\label{tab:sexlm}
+\end{table}
+
+Based on the output from the model, we can determine that there do exist differences between schools as $\sigma$ is 1.98. This means that test scores between schools will differ with standard deviation 1.98. However since $\tau$ is 6.01, which is significantly bigger than $\sigma$, we can assert that differences within schools are much greater than differences across schools. That is, individual level variation is much greater than school level variation. Two students of the same minority status and socio-economic status in the same school will have a difference of test scores with standard deviation 12.02. Therefore, it is concluded that differences in test scores are more greatly influenced by the differences in students than in schools. 
+
+
